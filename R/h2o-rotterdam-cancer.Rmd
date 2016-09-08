@@ -1,0 +1,81 @@
+---
+title: "Rotterdam Microarray H2O Demo"
+output: html_notebook
+---
+
+## Start up H2O
+
+```{r}
+library(h2o)
+h2o.init(nthreads = -1, max_mem_size = "8G")
+```
+
+
+## Import the Rotterdam Cancer dataset
+
+This dataset is 286 patients (rows) with 22,283 features (columns) that represent gene expression levels.  There is an associated binary outcome column called "response" that indicates whether or not their cancer metastisized within five years of a procedure.
+
+```{r}
+file <- "http://www.stat.berkeley.edu/~ledell/data/rotterdam.csv.gz"
+df <- h2o.importFile(file)
+dim(df)
+```
+
+Take a quick look at the data:
+```{r}
+df[1:5,1:5]
+```
+
+
+Next, identify the response variable and predictor columns.
+```{r}
+y <- "relapse"
+x <- setdiff(names(df), y)
+df[,y] <- as.factor(df[,y])  #Convert to factor (for binary classification)
+```
+
+
+Lastly, we will do a simple train/test split:
+```{r}
+splits <- h2o.splitFrame(df, seed = 1)
+train <- splits[[1]]
+test <- splits[[2]]
+print(dim(train))
+print(dim(test))
+```
+
+
+## Train an H2O model
+
+Let's try a GLM.  By default, this will run an elastic net GLM with alpha = 0.5.
+
+```{r}
+h2o_glm <- h2o.glm(x = x, y = y, 
+                   family = "binomial",
+                   training_frame = train,
+                   solver = "L_BFGS",  #The L_BFGS solver is better for large number of columns
+                   model_id = "glm_lbfgs")  #Give an id that 
+
+glm_perf <- h2o.performance(h2o_glm, newdata = test)
+glm_perf
+```
+
+We can hop over to the [H2O Flow GUI](http://127.0.0.1:54321/flow/index.html) to look at results as well.
+
+
+For comparison, let's try a random forest (with all default hyperparameters).
+
+```{r}
+h2o_rf <- h2o.randomForest(x = x, y = y,
+                           training_frame = train,
+                           seed = 1,
+                           model_id = "rf_default")
+
+h2o_perf <- h2o.performance(h2o_rf, newdata = test)
+h2o_perf
+```
+
+
+```{r}
+h2o.varimp_plot(h2o_rf, 20)
+```
